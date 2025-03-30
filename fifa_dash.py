@@ -1,14 +1,17 @@
+
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 from io import StringIO
+from dash import Dash, dcc, html, Input, Output
+import plotly.express as px
+import os
 
-#SCRAPING DATA
+#wiki scrape
 url = "https://en.wikipedia.org/wiki/List_of_FIFA_World_Cup_finals"
 response = requests.get(url)
 soup = BeautifulSoup(response.text, "html.parser")
 tables = soup.find_all("table", {"class": "wikitable"})
-
 
 target_table = None
 for table in tables:
@@ -20,36 +23,26 @@ for table in tables:
 if target_table is None:
     raise Exception("Couldn't find the correct table!")
 
-#wiki column
+#clean col
 df = target_table
 df.columns = ['Year', 'Winners', 'Score', 'Runners-up', 'Venue', 'Location', 'Attendance', 'Ref']
 df = df[['Year', 'Winners', 'Runners-up']]
-df = df.dropna(subset=['Winners', 'Runners-up'])
 
-#West Germany into Germany
+#unifying
+df = df.dropna(subset=['Winners', 'Runners-up'])
 df.loc[:, 'Winners'] = df['Winners'].replace({'West Germany': 'Germany'})
 df.loc[:, 'Runners-up'] = df['Runners-up'].replace({'West Germany': 'Germany'})
 
-#Print preview
-print(df.head())
-
-
-
-from dash import Dash, dcc, html, Input, Output
-import plotly.express as px
-
-# App instance
+#dashapp setup
 app = Dash(__name__)
 
-# 1. World Cup Wins by Country
 win_counts = df['Winners'].value_counts().reset_index()
 win_counts.columns = ['Country', 'Wins']
 
-# 2. App Layout
+#layout
 app.layout = html.Div([
     html.H1("FIFA World Cup Dashboard", style={'textAlign': 'center'}),
-    
-    # Choropleth Map
+
     dcc.Graph(id='choropleth',
               figure=px.choropleth(
                   win_counts,
@@ -57,9 +50,9 @@ app.layout = html.Div([
                   locationmode='country names',
                   color='Wins',
                   color_continuous_scale='Blues',
-                  title='World Cup Wins by Country',
+                  title='World Cup Wins by Country'
               )),
-    
+
     html.Div([
         html.Label("Select a Country:"),
         dcc.Dropdown(
@@ -81,6 +74,7 @@ app.layout = html.Div([
     ], style={'width': '48%', 'display': 'inline-block', 'padding': '10px'})
 ])
 
+#callback
 @app.callback(
     Output('country-output', 'children'),
     Input('country-dropdown', 'value')
@@ -101,5 +95,7 @@ def update_year_output(selected_year):
         return f"In {selected_year}, {winner} won against {runner_up}."
     return "No data for this year."
 
+# --- Run on 0.0.0.0 for Render ---
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 8050))
+    app.run(host="0.0.0.0", port=port, debug=True)
